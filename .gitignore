@@ -1,11 +1,4 @@
-target/XenonPublish.bin.no_crc
 .vscode/launch.json
 .vscode/settings.json
 src/XenonPublish.cpp
-target/XenonPublish.bin
-target/XenonPublish.dfu
-target/XenonPublish.elf
-target/XenonPublish.hex
-target/XenonPublish.lst
-target/XenonPublish.map
-target/XenonPublish.bin.crc_block
+target/
