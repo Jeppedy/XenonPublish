@@ -17,8 +17,8 @@ int iterCount;
 DS18B20 sensors(ONE_WIRE_BUS, true);
 
 //---------------------------------------------------------
-void blinkLED( int LEDPin ) {
-  for( int i=0; i<3; i++) {
+void blinkLED( int LEDPin, int times ) {
+  for( int i=0; i < times; i++) {
     digitalWrite(LEDPin, HIGH);
     delay( 150 );
     digitalWrite(LEDPin, LOW);
@@ -40,7 +40,6 @@ double getTemp(){
   if (i < MAXRETRY) {
     celsius = _temp;
     fahrenheit = sensors.convertToFahrenheit(_temp);
-    Serial.println(fahrenheit);
   }
   else {
     celsius = fahrenheit = NAN;
@@ -57,7 +56,7 @@ void setup() {
   pinMode(ONE_WIRE_BUS, INPUT);
 
   Particle.process();
-  blinkLED( boardLed );
+  blinkLED( boardLed, 5 );
 
   Particle.publish("AppVer", "XenonPublish-v1", 60, PRIVATE);
 
@@ -76,7 +75,7 @@ void loop() {
   //sensors.requestTemperatures(); // Send the command to get temperatures
   //temp1 = sensors.getTempFByIndex(1);  // Garage
   //temp2 = sensors.getTempFByIndex(0);  // Freezer
-  temp1 = 0;
+  temp1 = (float)getTemp();
   temp2 = 0;
   temp3 = 0; //Voltage
   
@@ -91,7 +90,9 @@ void loop() {
     );
 
   Serial.printf("outBuffer: %s len: %d \n",outBuffer, strlen(outBuffer));
+  Particle.publish("OutBuff", outBuffer, 60, PRIVATE);
 
+  blinkLED( boardLed, 1 );
 
   delay(5000);
 
