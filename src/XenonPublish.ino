@@ -19,11 +19,11 @@ DS18B20 sensors(ONE_WIRE_BUS, true);
 //---------------------------------------------------------
 void blinkLED( int LEDPin, int times ) {
   for( int i=0; i < times; i++) {
+    if( i > 0 )
+      delay( 200 );
     digitalWrite(LEDPin, HIGH);
     delay( 150 );
     digitalWrite(LEDPin, LOW);
-
-    delay( 200 );
   }
 }
 
@@ -42,7 +42,7 @@ double getTemp(){
     fahrenheit = sensors.convertToFahrenheit(_temp);
   }
   else {
-    celsius = fahrenheit = NAN;
+    celsius = fahrenheit = 999;
     Serial.println("Invalid reading");
   }
   return fahrenheit ;
@@ -50,20 +50,22 @@ double getTemp(){
 
 //---------------------------------------------------------
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(14400);
  
   pinMode(boardLed, OUTPUT);
   pinMode(ONE_WIRE_BUS, INPUT);
 
   Particle.process();
-  blinkLED( boardLed, 5 );
 
   Particle.publish("AppVer", "XenonPublish-v1", 60, PRIVATE);
 
-  // sensors.setResolution(11);   // max = 12
+  blinkLED( boardLed, 5 );
+
+  sensors.setResolution(TEMP_11_BIT);   // max = 12
 }
 
 void loop() {
+  digitalWrite(boardLed, HIGH);
   Mesh.publish("PUBSUB", "xenon-pub");
 
   float temp1=0;
@@ -90,10 +92,10 @@ void loop() {
     );
 
   Serial.printf("outBuffer: %s len: %d \n",outBuffer, strlen(outBuffer));
-  Particle.publish("OutBuff", outBuffer, 60, PRIVATE);
+  Mesh.publish("OutBuff", outBuffer);
 
-  blinkLED( boardLed, 1 );
+  digitalWrite(boardLed, LOW);
 
-  delay(5000);
+  delay(10000);
 
 }
