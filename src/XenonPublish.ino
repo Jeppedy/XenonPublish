@@ -9,10 +9,13 @@
 
 #define ONE_WIRE_BUS D4  // Data wire is plugged into pin 2 on the Arduino
 
-const int      MAXRETRY          = 4;
+const int MAXRETRY = 5;
 
 int boardLed = D7; // This is the LED that is already on your device.
 int iterCount;
+int crcErrCount = 0;
+int failedTempRead = 0;
+char devShortID[4+1];
 
 DS18B20 sensors(ONE_WIRE_BUS, true);
 
@@ -28,24 +31,27 @@ void blinkLED( int LEDPin, int times ) {
 }
 
 double getTemp(){
-  double   celsius;
-  double   fahrenheit;
+  double tempOut = 999;
   float _temp;
   int   i = 0;
 
   do {
+//    Serial.println("Obtaining reading");
     _temp = sensors.getTemperature();
-  } while (!sensors.crcCheck() && MAXRETRY > i++);
+    if(!sensors.crcCheck()) {
+      crcErrCount++ ;
+    } else {
+      break ;
+    }
+  } while ( MAXRETRY > i++);
 
   if (i < MAXRETRY) {
-    celsius = _temp;
-    fahrenheit = sensors.convertToFahrenheit(_temp);
+    tempOut = sensors.convertToFahrenheit(_temp);
   }
   else {
-    celsius = fahrenheit = 999;
     Serial.println("Invalid reading");
   }
-  return fahrenheit ;
+  return tempOut ;
 }
 
 //---------------------------------------------------------
@@ -55,47 +61,56 @@ void setup() {
   pinMode(boardLed, OUTPUT);
   pinMode(ONE_WIRE_BUS, INPUT);
 
-  Particle.process();
+  Particle.variable("devShortID", devShortID );
+  Particle.variable("iterCount", iterCount );
+  Particle.variable("crcErrCount", crcErrCount );
+  Particle.variable("badTempRead", failedTempRead );
 
   Particle.publish("AppVer", "XenonPublish-v1", 60, PRIVATE);
 
-  blinkLED( boardLed, 5 );
+  // Device Name Identification
+  String devFullID = System.deviceID() ;
+  Serial.printf("Full DevID: %s\n", devFullID.c_str() );
+  devFullID.substring(strlen(devFullID)-4, strlen(devFullID)).toUpperCase().toCharArray(devShortID,4+1) ;
+  //Serial.println( devShortID );
 
   sensors.setResolution(TEMP_11_BIT);   // max = 12
+
+  // blinkLED( boardLed, 5 );
 }
 
 void loop() {
   digitalWrite(boardLed, HIGH);
-  Mesh.publish("PUBSUB", "xenon-pub");
 
   float temp1=0;
   float temp2=0;
   float temp3=0;
   char outBuffer[32] ; 
 
-
-  //sensors.requestTemperatures(); // Send the command to get temperatures
-  //temp1 = sensors.getTempFByIndex(1);  // Garage
-  //temp2 = sensors.getTempFByIndex(0);  // Freezer
   temp1 = (float)getTemp();
   temp2 = 0;
   temp3 = 0; //Voltage
   
+  if( temp1 == 999 || temp2 == 999 || temp3 == 999) {
+    Serial.printlnf("Invalid temp found! [%f] [%f] [%f]", temp1, temp2, temp3);
+    failedTempRead++ ;
+  }
+
   if ( ++iterCount > 999 ) iterCount = 0;
 
-  sprintf(outBuffer, "%2X,%03d,%04u,%04u,%04u",
-    0xAA,    //    configs.nodeid & 0xff,
+  sprintf(outBuffer, "%c%c,%03d,%04u,%04u,%04u",
+    devShortID[2], devShortID[3],
     iterCount,
     (int16_t)(temp1*10),
     (int16_t)(temp2*10),
     (int16_t)(temp3*10)
     );
 
+  Mesh.publish("temps", outBuffer);
   Serial.printf("outBuffer: %s len: %d \n",outBuffer, strlen(outBuffer));
-  Mesh.publish("OutBuff", outBuffer);
+  // Particle.publish("tempDBG", outBuffer, 60, PRIVATE);
 
   digitalWrite(boardLed, LOW);
 
-  delay(10000);
-
+  delay(10 * 1000);
 }
