@@ -5,19 +5,21 @@
  * Date:
  */
 
-#include <DS18B20.h>
+//#include <DS18B20.h>
 
 const boolean debug = false ;
 const int ONE_WIRE_BUS = D4;  // Data wire is plugged into pin 2 on the Arduino
 const int boardLed = D7; // This is the LED that is already on your device.
 const int MAXRETRY = 3;
-const char appVer[] = "v2.0-XenonPublish" ;
+const char appVer[] = "v2.3-XenonPublish" ;
 
 int iterCount;
 int crcErrCount = 0;
 int failedTempRead = 0;
+int meshNotReady = 0;
 char devShortID[4+1];
 unsigned long old_time = 0;
+const unsigned long DELAYINTERVAL = 5*60*1000;
 
 DS18B20 sensors(ONE_WIRE_BUS, true);
 
@@ -25,29 +27,40 @@ DS18B20 sensors(ONE_WIRE_BUS, true);
 void setup() {
   Serial.begin(14400);
  
+  selectExternalMeshAntenna() ;
+
   pinMode(boardLed, OUTPUT);
   pinMode(ONE_WIRE_BUS, INPUT);
 
-  Particle.variable("devShortID", devShortID );
+  // Particle.variable("devShortID", devShortID );
   Particle.variable("iterCount", iterCount );
   Particle.variable("crcErrCount", crcErrCount );
   Particle.variable("badTempRead", failedTempRead );
+  Particle.variable("meshNotReady", meshNotReady );
 
-  Particle.publish("AppVer", appVer, 60, PRIVATE);
+  publishSafe("AppVer", appVer, PRIVATE);
 
   // Device Name Identification
   String devFullID = System.deviceID() ;
   Serial.printf("Full DevID: %s\n", devFullID.c_str() );
   devFullID.substring(strlen(devFullID)-4, strlen(devFullID)).toUpperCase().toCharArray(devShortID,4+1) ;
-  //Serial.println( devShortID );
 
   sensors.setResolution(TEMP_11_BIT);   // max = 12
+}
 
-  // blinkLED( boardLed, 5 );
+boolean publishSafe(const char *eventName, const char *data, PublishFlags flags) {
+  boolean rtn = false;
+  if ( Particle.connected() ) {
+    //rtn = Particle.publish( eventName, data, flags );
+  }
+  else {
+    Serial.println("Publish was skipped-disconnected");
+  }
+  return rtn;
 }
 
 void loop() {
-  if(millis() - old_time >= 10*1000) {
+  if(millis() - old_time >= DELAYINTERVAL || old_time == 0 ) {
     digitalWrite(boardLed, HIGH);
       publishTemp() ;
     digitalWrite(boardLed, LOW);
@@ -56,6 +69,18 @@ void loop() {
 }
 
 //---------------------------------------------------------
+
+void selectExternalMeshAntenna() {
+  #if (PLATFORM_ID == PLATFORM_ARGON)
+    digitalWrite(ANTSW1, 1);
+    digitalWrite(ANTSW2, 0);
+  #elif (PLATFORM_ID == PLATFORM_BORON)
+    digitalWrite(ANTSW1, 0);
+  #else
+    digitalWrite(ANTSW1, 0);
+    digitalWrite(ANTSW2, 1);
+  #endif
+}
 
 void publishTemp( void ) {
   float temp1=0;
@@ -71,7 +96,7 @@ void publishTemp( void ) {
     char errMsg[128+1] ;
     sprintf(errMsg, "Invalid temp found! [%f] [%f] [%f]", temp1, temp2, temp3 ) ;
     Serial.println( errMsg );
-    if( debug ) Particle.publish("Error", errMsg, 60, PRIVATE );
+    if( debug ) publishSafe("Error", errMsg, PRIVATE );
     failedTempRead++ ;
   }
   Particle.process() ;
@@ -86,9 +111,14 @@ void publishTemp( void ) {
     (int16_t)(temp3*10)
     );
 
-  Mesh.publish("temps", outBuffer);
+  if( Mesh.ready() ) {
+    Mesh.publish("temps", outBuffer);
+  } else {
+    Serial.println("Publish was skipped-disconnected");
+    meshNotReady++ ;
+  }
   Serial.printf("outBuffer: %s len: %d \n",outBuffer, strlen(outBuffer));
-  if( debug ) Particle.publish("tempDBG", outBuffer, 60, PRIVATE);
+  if( debug ) publishSafe("tempDBG", outBuffer, PRIVATE);
 }
 
 void blinkLED( int LEDPin, int times ) {
@@ -121,6 +151,7 @@ double getTemp(){
   }
   else {
     Serial.println("Invalid reading");
+    tempOut = 999;
   }
   return tempOut ;
 }
