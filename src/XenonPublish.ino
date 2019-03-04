@@ -6,7 +6,7 @@
  */
 
 #include <DS18B20.h>
-#include <IntervalMgr.h>
+#include <IntervalManager.h>
 
 const boolean debug = true ;
 const int ONE_WIRE_BUS_1 = D4; 
@@ -70,8 +70,8 @@ boolean publishSafe(const char *eventName, const char *data, PublishFlags flags)
 }
 
 void loop() {
-  static IntervalMgr tempTimer( TEMPPUB_DELAY ) ;
-  static IntervalMgr panicTimer( PANICCHECK_DELAY ) ;
+  static IntervalManager tempTimer( TEMPPUB_DELAY ) ;
+  static IntervalManager panicTimer( PANICCHECK_DELAY ) ;
 
   if( debug ) publishSafe("DBG", "Publish Temps", PRIVATE );
   if( tempTimer.isTimeToRun()  ) publishTemp() ;
@@ -174,7 +174,7 @@ void blinkLED( int LEDPin, int times ) {
 }
 
 void checkForDisconnectPanic() {
-  static IntervalMgr disconnectTimer( 3*60*1000 ) ;
+  static IntervalManager disconnectTimer( 3*60*1000 ) ;
 
   if (Particle.connected()) {
     digitalWrite(boardLed, LOW);
